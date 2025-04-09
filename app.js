@@ -3,39 +3,25 @@ const app = express();
 const port = 3001;
 app.use(express.static('public'));
 const myRepository = require('./myRepository');
+const authMiddleWare = require('./authMiddleWare');
 const bodyParser = require('body-parser');
 app.use(bodyParser.json());
 app.use(express.json()); // Enable JSON parsing
+const jwt = require('jsonwebtoken');
 // By crypt 
 const bcrypt = require('bcrypt');
 const send = require('send');
 const { hash } = require('crypto');
 const saltRounds = 10;
-const jwt = require('jsonwebtoken');
+
 const cookieparser = require('cookie-parser');
 const { log } = require('console');
 app.use(cookieparser('secret'));
 require('dotenv').config();
-// Middleware 
-
-const authnticationToken = (async (req, res, next) => {
-    const authHeader = req.headers.autorization;
-    try {
-        const check = await jwt.verify(authHeader, process.env.JWT_SECRET);
-        if (check) {
-            console.log('Check', check);
-
-        }
-
-    } catch (err) {
-        console.log('Error', err);
-    }
 
 
-
-    next();
-});
-
+// If token exist he refresh 
+app.use(authMiddleWare.refreshToken);
 
 app.get('/hello', (req, res) => {
     res.send({ "hello": "Haim Huber" });
@@ -74,7 +60,7 @@ app.post('/signin', async (req, res) => {
         if (result.id > 0) {
             const enctypedPassword = await bcrypt.compare(password, result.password);
             if (enctypedPassword) {
-                const token = jwt.sign({ username: userName }, process.env.JWT_SECRET, { expiresIn: '1s' });
+                const token = jwt.sign({ username: userName }, process.env.JWT_SECRET, { expiresIn: '2m' });
                 res.cookie("token", token);
                 console.log(token);
 
@@ -92,9 +78,14 @@ app.post('/signin', async (req, res) => {
 });
 
 
-app.get('/protected', authnticationToken, (req, res) => {
+app.get('/protected', authMiddleWare.authenticateToken, (req, res) => {
     res.json({ msg: "Hello From protected" });
-})
+});
+
+app.get('/signout', (req, res) => {
+    authMiddleWare.eraseTokenFromCookie(req);
+    res.json({ msg: "Logged out" });
+});
 
 app.listen((port), () => {
     console.log(`Server is running on http://localhost:${port}`);
